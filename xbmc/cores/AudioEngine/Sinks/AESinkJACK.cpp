@@ -90,7 +90,6 @@ bool CAESinkJACK::Initialize(AEAudioFormat &format, std::string &device)
   cout << "  -> setting framesize (" << j_framesize << ")..." << endl;
   format.m_frameSize = j_framesize;
 
-  m_ts                   = 0;
   m_msPerFrame = 1.0 / j_samplerate * 1000.0;
 
   cout << "  -> connecting to jack (" << outs << " channels)..." << endl ;
@@ -116,32 +115,21 @@ void CAESinkJACK::Deinitialize()
 bool CAESinkJACK::IsCompatible(const AEAudioFormat format, const std::string device)
 {
   cout << "Checking compatibility (device: " << device << ")..." << endl;
-  // return true;
   return false;
 }
 
 double CAESinkJACK::GetDelay()
 {
-  //return std::max(0.0, (double)(m_ts - CurrentHostCounter()) / 1000000.0f);
   return 0.0;
 }
 
 unsigned int CAESinkJACK::AddPackets(uint8_t *data, unsigned int frames, bool hasAudio)
 {
-  // if (hasAudio) {
-    jack_default_audio_sample_t* jdata = (jack_default_audio_sample_t*)data;
-    for (unsigned int frame = 0; frame < frames; frame++)
-    {
-      for (unsigned int out = 0; out < outs; out++)
-        jackBuffer->write(out, jdata[out + frame * outs]);
-    }
-  // }
-
-  float timeout = m_msPerFrame * frames;
-  m_ts = CurrentHostCounter() + MathUtils::round_int(timeout * 1000000.0f);
-  Sleep(MathUtils::round_int(timeout));
+  jack_default_audio_sample_t* jdata = (jack_default_audio_sample_t*)data;
+  for (unsigned int frame = 0; frame < frames; frame++)
+    for (unsigned int out = 0; out < outs; out++)
+      jackBuffer->write(out, jdata[out + frame * outs]);
   return frames;
-
 }
 
 void CAESinkJACK::Drain()

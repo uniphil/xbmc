@@ -47,7 +47,6 @@ public:
 
   static void          EnumerateDevicesEx (AEDeviceInfoList &deviceInfoList, bool force = false);
 private:
-  int64_t m_ts;
   float   m_msPerFrame;
 
   unsigned int outs;
