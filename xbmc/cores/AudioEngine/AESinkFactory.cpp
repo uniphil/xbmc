@@ -20,6 +20,7 @@
 
 #include "AESinkFactory.h"
 #include "Interfaces/AESink.h"
+#include "Sinks/AESinkJACK.h"
 #if defined(TARGET_WINDOWS)
   #include "Sinks/AESinkWASAPI.h"
   #include "Sinks/AESinkDirectSound.h"
@@ -50,6 +51,7 @@ void CAESinkFactory::ParseDevice(std::string &device, std::string &driver)
 
     // check that it is a valid driver name
     if (
+        driver == "JACK"        ||
 #if defined(TARGET_WINDOWS)
         driver == "WASAPI"      ||
         driver == "DIRECTSOUND" ||
@@ -100,6 +102,10 @@ IAESink *CAESinkFactory::Create(std::string &device, AEAudioFormat &desiredForma
     TRY_SINK(Profiler);
 
 
+  // give jack a shot.
+  if (driver.empty() || driver == "JACK")
+    TRY_SINK(JACK)
+
 #if defined(TARGET_WINDOWS)
   if ((driver.empty() && g_sysinfo.IsVistaOrHigher() ||
     driver == "WASAPI") && !g_advancedSettings.m_audioForceDirectSound)
@@ -139,6 +145,7 @@ IAESink *CAESinkFactory::Create(std::string &device, AEAudioFormat &desiredForma
 
 void CAESinkFactory::EnumerateEx(AESinkInfoList &list, bool force)
 {
+  ENUMERATE_SINK(JACK, force);
 #if defined(TARGET_WINDOWS)
   ENUMERATE_SINK(DirectSound, force);
   if (g_sysinfo.IsVistaOrHigher() && !g_advancedSettings.m_audioForceDirectSound)

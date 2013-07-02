@@ -20,6 +20,10 @@ CXXFLAGS += -D__STDC_LIMIT_MACROS
 
 SRCS  = AEFactory.cpp
 
+SRCS += Sinks/AESinkJACK.cpp
+SRCS += Sinks/jackaudioio.cpp
+SRCS += Sinks/jackblockingaudioio.cpp
+
 ifeq ($(findstring osx,@ARCH@),osx)
 SRCS += Engines/CoreAudio/CoreAudioAE.cpp
 SRCS += Engines/CoreAudio/CoreAudioAEHAL.cpp
