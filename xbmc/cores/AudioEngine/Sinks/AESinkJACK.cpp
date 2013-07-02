@@ -23,9 +23,6 @@
 
 #include "AESinkJACK.h"
 #include "jackblockingaudioio.hpp"
-extern "C" {
-#include <jack/types.h>
-}
 
 #include <stdint.h>
 #include <limits.h>
@@ -40,8 +37,8 @@ extern "C" {
 #include "utils/TimeUtils.h"
 #include "settings/GUISettings.h"
 
-#define BUFFER CHUNKLEN * 20
-#define CHUNKLEN 512
+#define CACHE_MAGIC 10000
+#define DELAY_MAGIC 0.6
 
 using std::cout;
 using std::endl;
@@ -60,7 +57,7 @@ bool CAESinkJACK::Initialize(AEAudioFormat &format, std::string &device)
 {
 
   cout << "Starting JackCpp::BlockingAudioIO (" << device << "):" << endl;
-  jackBuffer = new JackCpp::BlockingAudioIO("xbmc jack woo", outs, outs);
+  jackBuffer = new JackCpp::BlockingAudioIO("xbmc jack woo", outs, outs, CACHE_MAGIC, CACHE_MAGIC);
   jackBuffer->start();
 
   unsigned int j_samplerate = jackBuffer->getSampleRate();
@@ -76,7 +73,7 @@ bool CAESinkJACK::Initialize(AEAudioFormat &format, std::string &device)
     format.m_dataFormat = AE_FMT_FLOAT;
   }
 
-  jack_nframes_t j_buffersize = jackBuffer->getBufferSize();
+  j_buffersize = jackBuffer->getBufferSize();
   cout << "  -> setting num frames (" << j_buffersize << ")..." << endl;
   format.m_frames = j_buffersize;
 
@@ -90,7 +87,9 @@ bool CAESinkJACK::Initialize(AEAudioFormat &format, std::string &device)
   cout << "  -> setting framesize (" << j_framesize << ")..." << endl;
   format.m_frameSize = j_framesize;
 
-  m_msPerFrame = 1.0 / j_samplerate * 1000.0;
+  m_msPerFrame = 1000.0f / j_samplerate;
+  m_buffered_frames = 0;
+  m_last_update = CurrentHostCounter();
 
   cout << "  -> connecting to jack (" << outs << " channels)..." << endl ;
   for (unsigned int out = 0; out < outs; out++)
@@ -120,15 +119,32 @@ bool CAESinkJACK::IsCompatible(const AEAudioFormat format, const std::string dev
 
 double CAESinkJACK::GetDelay()
 {
-  return 0.0;
+  CacheUpdate();
+  double jack_latency = j_buffersize * m_msPerFrame / 1000.0f;
+  return GetCacheTime() + jack_latency + DELAY_MAGIC;
+}
+
+double CAESinkJACK::GetCacheTime()
+{
+  CacheUpdate(); 
+  return (double)(m_buffered_frames * m_msPerFrame) / 1000.0f;
+}
+
+double CAESinkJACK::GetCacheTotal()
+{
+  return (double)(CACHE_MAGIC * m_msPerFrame) / 1000.0f;
 }
 
 unsigned int CAESinkJACK::AddPackets(uint8_t *data, unsigned int frames, bool hasAudio)
 {
-  jack_default_audio_sample_t* jdata = (jack_default_audio_sample_t*)data;
+  CacheUpdate();
+  m_buffered_frames += frames;
+
+  float* jdata = (float*)data;
   for (unsigned int frame = 0; frame < frames; frame++)
     for (unsigned int out = 0; out < outs; out++)
       jackBuffer->write(out, jdata[out + frame * outs]);
+
   return frames;
 }
 
@@ -145,4 +161,14 @@ void CAESinkJACK::EnumerateDevicesEx (AEDeviceInfoList &deviceInfoList, bool for
   deviceInfo.m_displayNameExtra = std::string("(lelele)");
 
   deviceInfoList.push_back(deviceInfo);
+}
+
+void CAESinkJACK::CacheUpdate()
+{
+  uint64_t now = CurrentHostCounter();
+  unsigned int delta_time = (now - m_last_update) / 1000;
+  unsigned int eaten_frames = delta_time / m_msPerFrame;
+  m_buffered_frames -= (eaten_frames > m_buffered_frames ?
+                        m_buffered_frames : eaten_frames );
+  m_last_update = now;
 }

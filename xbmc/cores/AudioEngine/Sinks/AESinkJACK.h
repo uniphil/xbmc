@@ -25,6 +25,9 @@
 #include <stdint.h>
 #include "../Utils/AEDeviceInfo.h"
 
+extern "C" {
+#include <jack/types.h>
+}
 #include "jackblockingaudioio.hpp"
 
 class CAESinkJACK : public IAESink
@@ -40,16 +43,22 @@ public:
   virtual bool IsCompatible(const AEAudioFormat format, const std::string device);
 
   virtual double       GetDelay        ();
-  virtual double       GetCacheTime    () { return 0.0; }
-  virtual double       GetCacheTotal   () { return 0.0; }
+  virtual double       GetCacheTime    ();
+  virtual double       GetCacheTotal   ();
   virtual unsigned int AddPackets      (uint8_t *data, unsigned int frames, bool hasAudio);
   virtual void         Drain           ();
 
   static void          EnumerateDevicesEx (AEDeviceInfoList &deviceInfoList, bool force = false);
 private:
-  float   m_msPerFrame;
-
-  unsigned int outs;
 
   JackCpp::BlockingAudioIO * jackBuffer;
+
+  unsigned int outs;
+  jack_nframes_t j_buffersize;
+  float   m_msPerFrame;
+
+  unsigned int m_buffered_frames;
+  uint64_t m_last_update;
+
+  void CacheUpdate();
 };
